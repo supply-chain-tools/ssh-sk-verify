@@ -49,6 +49,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	if len(attestationData.Challenge) == 0 {
+		slog.Debug("input",
+			"public key length", len(attestationData.PublicKey),
+			"attestation length", len(attestationData.Attestation),
+			"challenge length", len(attestationData.Challenge),
+			"mds length", len(attestationData.MDS))
+	}
+
 	result, err := attest.Verify(attestationData)
 	if err != nil {
 		println("Failed to verify:", err.Error())
