@@ -138,7 +138,7 @@ func verifyAttestationSignature(attestation *SSHAttestation, authenticatorDataRa
 
 	verified := ecdsa.VerifyASN1(publicKey, signedPayloadHash[:], []byte(attestation.EnrollmentSignature))
 	if verified != true {
-		return nil, fmt.Errorf("failed to verify Attestation signature")
+		return nil, fmt.Errorf("failed to verify attestation signature")
 	}
 
 	return cert, nil
