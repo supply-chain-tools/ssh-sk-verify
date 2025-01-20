@@ -1,8 +1,8 @@
-# ssh-sk-attest
+# ssh-sk-verify
 
 **This code is still considered experimental: it should not be relied on for important stuff and breaking changes are to be expected.**
 
-OpenSSH `-sk` keys (security key) are backed by hardware using [WebAuthn](https://www.w3.org/TR/webauthn-2/). When generating `-sk` keys it's possible to also output
+OpenSSH `sk` keys (security key) are backed by hardware using [WebAuthn](https://www.w3.org/TR/webauthn-2/). When generating `sk` keys it's possible to also output
 attestation information. The FIDO Alliance maintains the Metadata Service (MDS) which includes the Authenticator Attestation GUID (AAGUID) of each authenticator
 along with its root certificates. This tool uses the MDS blob as a root of trust to validate the attestation data.
 
