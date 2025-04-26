@@ -93,21 +93,22 @@ func Verify(attestationData *AttestationData) (*AttestationResult, error) {
 }
 
 func verifyChain(entry *MetadataBlobEntry, leafCert *x509.Certificate) ([]*x509.Certificate, error) {
-	if len(entry.MetadataStatement.AttestationRootCertificates) != 1 {
-		return nil, fmt.Errorf("expected one certificate for AAGUID '%s', got %d", entry.AAGUID, len(entry.MetadataStatement.AttestationRootCertificates))
-	}
-	rootRaw, err := base64.StdEncoding.DecodeString(entry.MetadataStatement.AttestationRootCertificates[0])
-	if err != nil {
-		return nil, err
-	}
-
-	root, err := x509.ParseCertificate(rootRaw)
-	if err != nil {
-		return nil, err
-	}
-
 	roots := x509.NewCertPool()
-	roots.AddCert(root)
+
+	for _, attestationRootCertificate := range entry.MetadataStatement.AttestationRootCertificates {
+		rootRaw, err := base64.StdEncoding.DecodeString(attestationRootCertificate)
+		if err != nil {
+			return nil, err
+		}
+
+		root, err := x509.ParseCertificate(rootRaw)
+		if err != nil {
+			return nil, err
+		}
+
+		roots.AddCert(root)
+	}
+
 	chain, err := leafCert.Verify(x509.VerifyOptions{
 		Roots:     roots,
 		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
