@@ -5,7 +5,9 @@ import (
 	"crypto/ecdsa"
 	"crypto/sha256"
 	"crypto/x509"
+	"encoding/asn1"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"strings"
@@ -109,6 +111,30 @@ func verifyChain(entry *MetadataBlobEntry, leafCert *x509.Certificate) ([]*x509.
 		roots.AddCert(root)
 	}
 
+	AAGUIDVerified := false
+	for _, extension := range leafCert.Extensions {
+		if extension.Id.Equal(asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 45724, 1, 1, 4}) {
+			if extension.Value[0] != 4 {
+				return nil, fmt.Errorf("unexpected extentsion value %d\n", extension.Value[0])
+			}
+
+			if extension.Value[1] != 16 {
+				return nil, fmt.Errorf("unexpected extension length %d\n", extension.Value[1])
+			}
+
+			AAGUID := byteArrayToUUID(extension.Value[2:])
+			if entry.AAGUID != AAGUID {
+				return nil, fmt.Errorf("leaf AAGUID does not match MDS entry AAGUID")
+			}
+
+			AAGUIDVerified = true
+		}
+	}
+
+	if !AAGUIDVerified {
+		return nil, fmt.Errorf("failed to verify AAGUID via certificate extension")
+	}
+
 	chain, err := leafCert.Verify(x509.VerifyOptions{
 		Roots:     roots,
 		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
@@ -122,6 +148,22 @@ func verifyChain(entry *MetadataBlobEntry, leafCert *x509.Certificate) ([]*x509.
 	}
 
 	return chain[0], nil
+}
+
+func byteArrayToUUID(uuid []byte) string {
+	result := make([]byte, 36)
+
+	hex.Encode(result[0:9], uuid[:4])
+	result[8] = '-'
+	hex.Encode(result[9:13], uuid[4:6])
+	result[13] = '-'
+	hex.Encode(result[14:18], uuid[6:8])
+	result[18] = '-'
+	hex.Encode(result[19:23], uuid[8:10])
+	result[23] = '-'
+	hex.Encode(result[24:36], uuid[10:16])
+
+	return string(result)
 }
 
 func verifyAttestationSignature(attestation *SSHAttestation, authenticatorDataRaw []byte, challengeData []byte) (*x509.Certificate, error) {
