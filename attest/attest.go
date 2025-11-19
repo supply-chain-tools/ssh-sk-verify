@@ -112,14 +112,31 @@ func verifyChain(entry *MetadataBlobEntry, leafCert *x509.Certificate) ([]*x509.
 	}
 
 	AAGUIDVerified := false
+	VerifiedNotCA := false
+	extensions := make(map[string]struct{})
+
 	for _, extension := range leafCert.Extensions {
+		id := extension.Id.String()
+		_, found := extensions[id]
+		if !found {
+			extensions[id] = struct{}{}
+		} else {
+			// https://datatracker.ietf.org/doc/html/rfc5280#section-4.2
+			return nil, fmt.Errorf("duplicate extension with id '%s'", id)
+		}
+
 		if extension.Id.Equal(asn1.ObjectIdentifier{1, 3, 6, 1, 4, 1, 45724, 1, 1, 4}) {
+			// https://fidoalliance.org/specs/mds/fido-metadata-statement-v3.0-ps-20210518.html#dom-metadatastatement-attestationrootcertificates
+			if len(extension.Value) != 18 {
+				return nil, fmt.Errorf("expected AAGUID extension length 18, got %d", len(extension.Value))
+			}
+
 			if extension.Value[0] != 4 {
-				return nil, fmt.Errorf("unexpected extentsion value %d\n", extension.Value[0])
+				return nil, fmt.Errorf("expected AAGUID extension tag 4, got %d", extension.Value[0])
 			}
 
 			if extension.Value[1] != 16 {
-				return nil, fmt.Errorf("unexpected extension length %d\n", extension.Value[1])
+				return nil, fmt.Errorf("expected AAGUID length 16, got %d", extension.Value[1])
 			}
 
 			AAGUID := byteArrayToUUID(extension.Value[2:])
@@ -128,11 +145,56 @@ func verifyChain(entry *MetadataBlobEntry, leafCert *x509.Certificate) ([]*x509.
 			}
 
 			AAGUIDVerified = true
+		} else if extension.Id.Equal(asn1.ObjectIdentifier{2, 5, 29, 19}) {
+			// https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.9
+			if len(extension.Value) != 2 {
+				return nil, fmt.Errorf("expected basic contraints extension length 2, got %d", len(extension.Value))
+			}
+
+			if extension.Value[0] != 48 {
+				return nil, fmt.Errorf("expected basic contraints extension tag 48, got %d", extension.Value[0])
+			}
+
+			if extension.Value[1] != 0 {
+				return nil, fmt.Errorf("expected basic contraints extension value 0, got %d", extension.Value[1])
+			}
+
+			VerifiedNotCA = true
+		} else if extension.Id.Equal(asn1.ObjectIdentifier{2, 5, 29, 15}) {
+			// https://datatracker.ietf.org/doc/html/rfc5280#section-4.2.1.3
+			if len(extension.Value) != 4 {
+				return nil, fmt.Errorf("expected key usage extension length 4, got %d", len(extension.Value))
+			}
+
+			if extension.Value[0] != 3 {
+				return nil, fmt.Errorf("expected key usage extension tag 3, got %d", extension.Value[0])
+			}
+
+			if extension.Value[1] != 2 {
+				return nil, fmt.Errorf("expected key usage length 2, got %d", extension.Value[1])
+			}
+
+			if extension.Value[2] > 7 {
+				return nil, fmt.Errorf("expected key usage ignore bits to be no more than 7, got %d", extension.Value[2])
+			}
+
+			if (extension.Value[3] >> 7) != 1 {
+				return nil, fmt.Errorf("expected key usage to allow digital signature")
+			}
+		} else {
+			if extension.Critical == true {
+				// https://datatracker.ietf.org/doc/html/rfc5280#section-4.2
+				return nil, fmt.Errorf("unknown critical extension with id '%s'", id)
+			}
 		}
 	}
 
 	if !AAGUIDVerified {
 		return nil, fmt.Errorf("failed to verify AAGUID via certificate extension")
+	}
+
+	if !VerifiedNotCA {
+		return nil, fmt.Errorf("failed to verify that certificate is not a CA")
 	}
 
 	chain, err := leafCert.Verify(x509.VerifyOptions{
