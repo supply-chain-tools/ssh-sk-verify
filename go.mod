@@ -2,7 +2,7 @@ module github.com/supply-chain-tools/ssh-sk-verify
 
 go 1.24.0
 
-toolchain go1.25.4
+toolchain go1.25.9
 
 require golang.org/x/crypto v0.44.0
 
